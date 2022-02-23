@@ -1,11 +1,11 @@
 apiVersion: route.openshift.io/v1
 kind: Route 
 metadata:
-  name: devops-service
+  name: java-deployment-template
 spec:     
   to:
     kind: Service
-    name: devops-service
+    name: java-deployment-template
     weight: 100
   port:
     targetPort: http

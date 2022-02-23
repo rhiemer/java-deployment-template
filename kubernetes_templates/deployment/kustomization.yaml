@@ -6,10 +6,10 @@ metadata:
 namespace: devops-apps
 
 commonLabels:
-  app: java-deployment-template-app
+  app: java-deployment-template
 
 images:
- - name: java-deployment-template-app
+ - name: java-deployment-template
    newName: my.docker.registry.com/my-project/my-xxx
    newTag: test  
 

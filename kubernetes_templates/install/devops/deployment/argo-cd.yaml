@@ -4,17 +4,13 @@ metadata:
   name: devops-service
   namespace: openshift-gitops
 spec:
+  project: default
   destination:
     namespace: devops-apps
     server: https://kubernetes.default.svc
-  project: default
   source:
     directory:
       recurse: true
-    path: deployment
-    repoURL: https://github.com/rhiemer/devops-service.git
-    targetRevision: main
-  syncPolicy:
-    automated:
-      prune: false
-      selfHeal: false
+    path: kubernetes_templates/deployment
+    repoURL: https://github.com/rhiemer/java-deployment-template.git
+    targetRevision: develop

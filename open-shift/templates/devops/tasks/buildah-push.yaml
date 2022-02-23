@@ -1,0 +1,48 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: buildah-push
+spec:
+  stepTemplate:
+    securityContext:
+      runAsUser: 0
+      privileged: true
+  params:
+    - name: IMAGES
+      type: array
+      default: []  
+    - name: tlsVerify
+      type: string      
+      default: 'false'
+      description: tls verify
+  steps:
+    - name: push-image
+      image: quay.io/buildah/stable
+      securityContext:
+        privileged: true
+        runAsUser: 0
+      volumeMounts:
+        - name: $(workspaces.varlibc.volume)
+          mountPath: /var/lib/containers
+      args:
+        - $(params.IMAGES[*])      
+      script: |
+          #!/usr/bin/env bash
+          set -o errexit 
+          
+          TLS_VERIFY="$(params.tlsVerify)"
+
+          for IMAGE in $@ 
+          do    
+            if [ ! -z "${IMAGE// }" ] ; then
+              echo "Push da imagem $IMAGE"
+              buildah push \
+                --tls-verify=$TLS_VERIFY \
+                $IMAGE
+            fi
+          done     
+          
+          
+              
+  workspaces:
+    - name: varlibc

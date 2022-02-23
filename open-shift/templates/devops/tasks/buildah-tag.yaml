@@ -1,0 +1,49 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: buildah-tag
+spec:
+  stepTemplate:
+    securityContext:
+      runAsUser: 0
+      privileged: true
+  params:
+    - name: IMAGE
+      type: string
+      description: the fully qualified image name
+    - name: IMAGES_TAG
+      type: array
+      default: []         
+  steps:   
+    - name: tag-images
+      image: quay.io/buildah/stable
+      securityContext:
+        privileged: true
+        runAsUser: 0
+      volumeMounts:
+        - name: $(workspaces.varlibc.volume)
+          mountPath: /var/lib/containers
+      args:
+        - $(params.IMAGES_TAG[*])      
+      script: |
+          #!/usr/bin/env bash
+          set -o errexit 
+
+          IMAGE="$(params.IMAGE)"          
+          IMAGES_TAG=()
+          for _IMAGE in $@ 
+          do    
+            if [ ! -z "${_IMAGE// }" ] ; then
+              IMAGES_TAG+=( $_IMAGE ) 
+            fi
+          done
+
+          if [ ! -z "${IMAGES_TAG// }" ] ; then
+             echo "Tag das imagens de $IMAGE para ${IMAGES_TAG[@]}"
+             buildah tag \
+              $IMAGE \
+              ${IMAGES_TAG[@]}
+          fi
+          
+  workspaces:
+    - name: varlibc

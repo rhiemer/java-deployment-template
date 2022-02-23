@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: arbitrary
+
+namespace: devops-apps
+
+commonLabels:
+  app: java-deployment-template-app
+
+images:
+ - name: java-deployment-template-app
+   newName: my.docker.registry.com/my-project/my-xxx
+   newTag: test  
+
+resources:
+- ./components/deployment.yaml
+- ./components/service.yaml
+- ./components/route.yaml

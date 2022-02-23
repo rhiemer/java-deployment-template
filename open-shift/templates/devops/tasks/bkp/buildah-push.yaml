@@ -1,0 +1,52 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: buildah-push
+spec:
+  stepTemplate:
+    securityContext:
+      runAsUser: 0
+      privileged: true
+  params:
+    - name: CONTEXT_DIR
+      type: string
+      description: >-
+        The context directory within the repository for sources on
+        which we want to execute maven goals.
+      default: "."
+    - name: destinationImageName
+      description: the fully qualified image name
+      default: "devops-service"
+    - name: destinationImageTag
+      description: the fully qualified image name
+      default: "1.0.0"
+    - name: destinationImageHost
+      description: the fully qualified image name
+      default: "image-registry.openshift-image-registry.svc:5000/devops-apps"
+    - name: dockerFile
+      description: the docker file to used for building the application
+      default: Dockerfile
+    - name: tlsVerify
+      description: tls verify
+      type: string
+      default: "false"      
+  steps:
+    - name: build-image
+      image: quay.io/buildah/stable
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      command:
+        - "buildah"
+      args:
+        - "push"
+        - "--tls-verify=$(inputs.params.tlsVerify)"
+        - $(inputs.params.destinationImageHost)/$(inputs.params.destinationImageName):$(inputs.params.destinationImageTag)
+      securityContext:
+        privileged: true
+        runAsUser: 0
+      volumeMounts:
+      - name: $(workspaces.varlibc.volume)
+        mountPath: /var/lib/containers
+  workspaces:
+    - name: source          
+    - name: varlibc

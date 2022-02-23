@@ -1,0 +1,50 @@
+apiVersion: tekton.dev/v1beta1
+kind: ClusterTask
+metadata:
+  name: maven-file-deploy
+spec:
+  workspaces:
+    - name: source
+  params:
+    - name: IMAGE
+      type: string
+      default: maven:3.8.4-jdk-8
+    - name: CONTEXT_DIR
+      type: string
+      default: "."
+    - name: FILE
+      type: string
+      default: ""
+    - name: FOLDER
+      type: string
+      default: "target"         
+  results:
+    - name: file-deploy
+  steps:
+    - name: get-file-deploy
+      image: $(params.IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      script: |
+        #!/usr/bin/env bash
+        set -o errexit   
+        set -x
+
+        FILE="$(params.FILE)"
+        FOLDER="$(params.FOLDER)"
+
+        if [ ! -z "${FILE// }" ]; then
+           _FILE=`find ${FOLDER}/ -name ${FILE} -size +1000c -printf '%p %s\n' | sort -k2 -n | awk '{ print $1 }' | tail -n 1 || echo '' `
+        else
+           #busca o arquivo com o maior tamanho e o tipo relacionado a java
+           _FILE=${_FILE:-`find ${FOLDER}/ -type f -name *.ear -size +1000c -printf '%p %s\n' | sort -k2 -n | awk '{ print $1 }' | tail -n 1 || echo '' `}
+           _FILE=${_FILE:-`find ${FOLDER}/ -type f -name *.war -size +1000c -printf '%p %s\n' | sort -k2 -n | awk '{ print $1 }' | tail -n 1 || echo '' `}
+           _FILE=${_FILE:-`find ${FOLDER}/ -type f -name *.jar -size +1000c -printf '%p %s\n' | sort -k2 -n | awk '{ print $1 }' | tail -n 1 || echo '' `}
+        fi   
+   
+        if [ -z "${_FILE// }" ]; then
+           echo "Nenhum arquivo encontrado para deploy."
+        else   
+           echo "Arquivo para deploy `basename $_FILE`"
+        fi
+   
+        echo -n `realpath $_FILE` | tee $(results.file-deploy.path)

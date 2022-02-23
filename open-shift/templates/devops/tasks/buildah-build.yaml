@@ -1,0 +1,54 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: buildah-build
+spec:
+  stepTemplate:
+    securityContext:
+      runAsUser: 0
+      privileged: true
+  params:
+    - name: CONTEXT_DIR
+      type: string
+      description: >-
+        The context directory within the repository for sources on
+        which we want to execute maven goals.
+      default: "."
+    - name: IMAGE_BUILD
+      type: string
+      description: the fully qualified image name
+    - name: DOCKER_FILE
+      type: string
+      description: the docker file to used for building the application
+      default: Dockerfile
+    - name: ARGS
+      type: array
+      default: []        
+  steps:
+    - name: build-image
+      image: quay.io/buildah/stable
+      securityContext:
+        privileged: true
+        runAsUser: 0
+      volumeMounts:
+        - name: $(workspaces.varlibc.volume)
+          mountPath: /var/lib/containers
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      args:
+        - $(params.ARGS[*])      
+      script: |
+          #!/usr/bin/env bash
+          set -o errexit          
+          
+          DOCKER_FILE="$(params.DOCKER_FILE)"
+          IMAGE_BUILD="$(params.IMAGE_BUILD)"
+          echo "Build imagem $IMAGE_BUILD"
+
+          buildah bud --layers \
+            -f "$DOCKER_FILE" \
+            -t $IMAGE_BUILD \
+            . \
+            $@
+  workspaces:
+    - name: source          
+    - name: varlibc

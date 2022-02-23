@@ -1,0 +1,166 @@
+apiVersion: tekton.dev/v1beta1
+kind: ClusterTask
+metadata:
+  name: maven-upload
+spec:
+  params:
+    - name: MAVEN_IMAGE
+      type: string
+      description: Maven base image
+      default: maven:3.8.4-jdk-8
+    - name: FILE
+      type: string      
+    - name: URL_MAVEN
+      type: string
+      default: ""                   
+    - name: URL_MAVEN_SNAPSHOT
+      type: string      
+      default: ""                   
+    - name: USER_MAVEN
+      type: string
+      default: ""                   
+    - name: PASSWORD_MAVEN
+      type: string
+      default: ""                   
+    - name: REPLACE_SETTINGS
+      type: string
+      default: "true" 
+    - name: MAVEN_UPLOAD_SECRET
+      type: string
+      default: "maven-upload-secret"
+    - name: REPOSITORY_ID
+      type: string
+      default: ""                   
+    - name: GROUP_ID
+      type: string
+      default: ""                   
+    - name: ARTIFACT_ID
+      type: string
+      default: ""                   
+    - name: VERSION
+      type: string
+      default: ""                   
+    - name: MAVEN_COMMAND
+      type: array
+      description: Maven base image
+      default: []
+    - name: CONTEXT_DIR
+      type: string
+      default: "."
+    - name: REPO_LOCAL
+      type: string
+      default: "/usr/share/maven/ref/repository" 
+  workspaces:
+    - name: source          
+    - name: repo
+  stepTemplate:
+    envFrom:
+      - secretRef:
+          name: $(params.MAVEN_UPLOAD_SECRET)    
+  steps:
+    - name: upload
+      image: $(params.MAVEN_IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      volumeMounts:
+        - name: $(workspaces.repo.volume)
+          mountPath: /usr/share/maven/ref/repository
+      args:
+        - $(params.MAVEN_COMMAND[*])
+      script: |
+        #!/usr/bin/env bash
+        set -o errexit   
+        set -x
+    
+        URL_MAVEN_DEFAULT="$(params.URL_MAVEN)"
+        URL_MAVEN_SNAPSHOT_DEFAULT="$(params.URL_MAVEN_SNAPSHOT)"
+        USER_MAVEN_DEFAULT="$(params.USER_MAVEN)"
+        PASSWORD_MAVEN_DEFAULT="$(params.PASSWORD_MAVEN)"
+        REPOSITORY_ID_DEFAULT="$(params.REPOSITORY_ID)"
+        
+        REPLACE_SETTINGS="$(params.REPLACE_SETTINGS)"
+        REPO_LOCAL="$(params.REPO_LOCAL)"
+        FILE="$(params.FILE)"
+        GROUP_ID="$(params.GROUP_ID)"
+        ARTIFACT_ID="$(params.ARTIFACT_ID)"
+        VERSION="$(params.VERSION)"
+
+        URL_MAVEN="${URL_MAVEN_DEFAULT:-$URL_MAVEN}"
+        URL_MAVEN_SNAPSHOT="${URL_MAVEN_SNAPSHOT_DEFAULT:-$URL_MAVEN_SNAPSHOT}"
+        URL_MAVEN_SNAPSHOT="${URL_MAVEN_SNAPSHOT:-$URL_MAVEN}"
+
+        USER_MAVEN="${USER_MAVEN_DEFAULT:-$USER_MAVEN}"
+        PASSWORD_MAVEN="${PASSWORD_MAVEN_DEFAULT:-$PASSWORD_MAVEN}"
+        REPOSITORY_ID="${REPOSITORY_ID_DEFAULT:-$REPOSITORY_ID}"
+        
+    
+        PARAMS_COMMAND=()
+        if [ ! -z "${REPO_LOCAL// }" ]; then
+           PARAMS_COMMAND+=( "-Dmaven.repo.local=$REPO_LOCAL" )
+        fi 
+
+        case $VERSION in
+          *-SNAPSHOT)
+            URL_MAVEN="$URL_MAVEN_SNAPSHOT"           
+          ;;
+        esac
+
+        REPOSITORY_ID_URL="${URL_MAVEN##*/}"
+        REPOSITORY_ID="${REPOSITORY_ID:-$REPOSITORY_ID_URL}"
+
+        if [ "${REPLACE_SETTINGS// }" == "true" ] ; then
+          
+          SETTINGS_TMP="$( mktemp -u )"
+          MIRROR_OF="${REPOSITORY_ID}-mirror"
+          touch "$SETTINGS_TMP"
+
+          PARAMS_COMMAND+=( "--settings" "$SETTINGS_TMP" )
+
+
+          if [ ! -z "${USER_MAVEN// }" ]; then
+            cat > $SETTINGS_TMP << _EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <settings xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.1.0 http://maven.apache.org/xsd/settings-1.1.0.xsd" xmlns="http://maven.apache.org/SETTINGS/1.1.0"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+              <mirrors>
+                  <mirror>
+                    <mirrorOf>$MIRROR_OF</mirrorOf>
+                    <url>$URL_MAVEN/</url>
+                    <id>$REPOSITORY_ID</id>
+                  </mirror>
+              </mirrors>      
+              <servers>
+                <server>
+                  <id>$REPOSITORY_ID</id>
+                  <username>$USER_MAVEN</username>
+                  <password>$PASSWORD_MAVEN</password>
+                </server>
+              </servers>    
+        </settings>      
+        _EOF
+          else
+            cat > $SETTINGS_TMP << _EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <settings xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.1.0 http://maven.apache.org/xsd/settings-1.1.0.xsd" xmlns="http://maven.apache.org/SETTINGS/1.1.0"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+              <mirrors>
+                  <mirror>
+                    <mirrorOf>$MIRROR_OF</mirrorOf>
+                    <url>$URL_MAVEN/</url>
+                    <id>$REPOSITORY_ID</id>
+                  </mirror>
+              </mirrors>      
+        </settings>      
+        _EOF
+          fi
+        fi        
+
+        mvn -B ${PARAMS_COMMAND[@]} deploy:deploy-file \
+          -DskipTests \
+          -Dfile="$FILE" \
+          -DrepositoryId="$REPOSITORY_ID" \
+          -DgroupId="$GROUP_ID" \
+          -DartifactId="$ARTIFACT_ID" \
+          -Dversion="$VERSION" \
+          -Durl="$URL_MAVEN" \
+          $@
+      

@@ -1,0 +1,140 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: sonar
+  labels:
+    app.kubernetes.io/version: "0.2"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/categories: Security
+    tekton.dev/tags: security
+    tekton.dev/displayName: "sonarqube scanner"
+    tekton.dev/platforms: "linux/amd64"
+spec:
+  description: |-
+    This task runs commands on sonar-scanner client
+  params:
+  - default: sonarsource/sonar-scanner-cli:latest
+    description: Sonar Scanner image
+    name: IMAGE
+    type: string
+  - name: ARGS
+    type: array
+    description: The Sonar arguments arguments to run
+    default: [] 
+  - name: CONTEXT_DIR
+    type: string
+    description: >-
+       The context directory within the repository for sources on
+       which we want to execute maven goals.
+    default: "."      
+  - name: SONAR_PROPERTIES
+    type: string
+    default: $(workspaces.settings.path)/sonar.properties   
+  - name: SONAR_TYPE
+    type: string
+    default: ""    
+  - name: KEY
+    type: string
+    default: ""    
+  - name: VERSION
+    type: string
+    default: ""  
+  - name: NAME
+    type: string
+    default: ""        
+  - name: DESCRIPTION
+    type: string
+    default: ""
+  - name: FILE_JACOCO
+    type: string
+    default: "target/site/jacoco/jacoco.xml"      
+  workspaces:
+    - name: source          
+    - name: settings
+  results:
+    - name: sonar-properties
+      description: Sonar Properties tmp   
+  steps:
+   - name: sonar-properties
+     resources: {}
+     image: $(params.IMAGE)
+     workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)     
+     script: |
+      #!/usr/bin/env bash
+      set -o errexit
+
+      newValues() {
+          filename=$1
+          thekey=$2
+          newvalue=$3
+
+          if [ ! -z "${newvalue// }" ] ; then
+             if ! grep -R "^[#]*\s*${thekey}=.*" $filename >/dev/null; then
+              echo "$thekey=$newvalue" >>$filename
+             fi 
+          fi
+      }
+      
+      KEY="$(params.KEY)"
+      VERSION="$(params.VERSION)"
+      NAME="$(params.NAME)"
+      DESCRIPTION="$(params.DESCRIPTION)"
+      SONAR_TYPE="$(params.SONAR_TYPE)"
+      SONAR_PROPERTIES="$(params.SONAR_PROPERTIES)"
+
+      FILE_SONAR_PROPERTIES="$(results.sonar-properties.path)"
+      touch "$FILE_SONAR_PROPERTIES"      
+
+      if [[ -f "$SONAR_PROPERTIES" ]]; then
+        cat "$SONAR_PROPERTIES" >> "$FILE_SONAR_PROPERTIES" 
+        echo "" >> "$FILE_SONAR_PROPERTIES" 
+      fi      
+      
+      FILE_SONAR_PROPERTIES_PROJECT="sonar-project.properties"
+      if [[ -f "$FILE_SONAR_PROPERTIES_PROJECT" ]]; then
+        cat "$FILE_SONAR_PROPERTIES_PROJECT" >> "$FILE_SONAR_PROPERTIES" 
+        echo "" >> "$FILE_SONAR_PROPERTIES" 
+      fi      
+
+      case $SONAR_TYPE in
+          maven)
+              newValues "$FILE_SONAR_PROPERTIES" "sonar.language" "java"
+              newValues "$FILE_SONAR_PROPERTIES" "sonar.sources" "."
+              newValues "$FILE_SONAR_PROPERTIES" "sonar.inclusions" "src/main/**,pom.xml"
+              newValues "$FILE_SONAR_PROPERTIES" "sonar.test.inclusions" "src/test/**,pom.xml"
+              newValues "$FILE_SONAR_PROPERTIES" "sonar.java.binaries" "target/classes"
+              newValues "$FILE_SONAR_PROPERTIES" "sonar.java.test.binaries" "target/test-classes"
+              
+              FILE_JACOCO="$(params.FILE_JACOCO)"
+              if [[ -f "$FILE_JACOCO" ]]; then
+                newValues "$FILE_SONAR_PROPERTIES" "sonar.java.coveragePlugin" "jacoco"
+                newValues "$FILE_SONAR_PROPERTIES" "sonar.dynamicAnalysis" "reuseReports"
+                newValues "$FILE_SONAR_PROPERTIES" "sonar.coverage.jacoco.xmlReportPaths" "$FILE_JACOCO"
+              fi
+          ;;          
+      esac   
+
+      newValues "$FILE_SONAR_PROPERTIES" "sonar.projectKey" "$KEY"
+      newValues "$FILE_SONAR_PROPERTIES" "sonar.projectVersion" "$VERSION"
+      newValues "$FILE_SONAR_PROPERTIES" "sonar.projectName" "$NAME"
+      newValues "$FILE_SONAR_PROPERTIES" "sonar.projectDescription" "$DESCRIPTION"
+
+   - name: sonar-scanner
+     resources: {}
+     image: $(params.IMAGE)
+     workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+     args:
+       - $(params.ARGS[*])
+     script: |      
+        #!/usr/bin/env bash
+        set -o errexit
+
+        FILE_SONAR_PROPERTIES="$(results.sonar-properties.path)"
+        FILE_SONAR_PROPERTIES_BASE="./sonar-project.properties"
+        cp -rf "$FILE_SONAR_PROPERTIES" "$FILE_SONAR_PROPERTIES_BASE"
+
+        cat "$FILE_SONAR_PROPERTIES_BASE"
+        echo ""
+
+        /opt/sonar-scanner/bin/sonar-scanner $@

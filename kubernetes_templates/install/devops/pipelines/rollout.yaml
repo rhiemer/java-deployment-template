@@ -1,0 +1,96 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: rollout
+spec:  
+  params:
+   - name: git-url
+     type: string
+     default: 'https://github.com/rhiemer/java-deployment-template.git'
+   - name: git-revision
+     type: string
+     default: 'develop'     
+   - name: rollout-app-name
+     type: string
+     default: 'java-deployment-template' 
+   - name: rollout-revision
+     type: string
+     default: 'develop'     
+   - name: base-revision
+     type: string
+     default: 'develop'
+   - name: name-tag
+     type: string
+     default: ''                      
+  tasks:
+    - name: generate-build-id
+      taskRef:
+        kind: ClusterTask
+        name: generate-build-id
+      params:
+        - name: base-version
+          value: '$(params.base-revision)'
+    - name: rollout
+      taskRef:
+        kind: ClusterTask
+        name: argocd-rollout      
+      runAfter:
+        - generate-build-id
+      params:
+        - name: APP_NAME
+          value: "$(params.rollout-app-name)"
+        - name: REVISION
+          value: "$(params.rollout-revision)"  
+    - name: git-clone
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      runAfter:
+        - rollout
+      params:
+        - name: url
+          value: "$(params.git-url)"
+        - name: revision
+          value: "$(params.git-revision)"
+        - name: subdirectory
+          value: "$(tasks.generate-build-id.results.build-id)"          
+      workspaces:
+        - name: output
+          workspace: source-dir                  
+        - name: basic-auth
+          workspace: git-basic-auth
+        - name: ssh-directory
+          workspace: git-ssh-directory
+    - name: git-tag
+      taskRef:
+        kind: ClusterTask
+        name: git-cli
+      runAfter:
+        - git-clone
+      params:
+        - name: GIT_USER_EMAIL
+          value: user@email.com
+        - name: GIT_USER_NAME
+          value: user
+        - name: GIT_SCRIPT
+          value: |
+            BUILD_ID="$(tasks.generate-build-id.results.build-id)"
+            NAME_TAG="$(params.name-tag)"
+            NAME_TAG="${NAME_TAG:-$BUILD_ID}"            
+            
+            cd "$(tasks.generate-build-id.results.build-id)"
+            git tag -a $NAME_TAG -m "[DevOps][Rollout] Rollout $(tasks.generate-build-id.results.build-id)"
+            git push origin --tags
+      workspaces:
+        - name: source
+          workspace: source-dir       
+        - name: basic-auth
+          workspace: git-basic-auth
+        - name: ssh-directory
+          workspace: git-ssh-directory
+  workspaces:
+    - name: source-dir
+    - name: git-basic-auth
+      optional: true   
+    - name: git-ssh-directory
+      optional: true   

@@ -1,7 +1,7 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-metadata:
-  name: kustomization-deployment
+resources:
+- ./components/deployment.yaml
+- ./components/service.yaml
+- ./components/route.yaml
 
 namespace: devops-apps
 
@@ -13,7 +13,3 @@ images:
    newName: image-registry.openshift-image-registry.svc:5000/devops-apps/devops-service
    newTag: latest
 
-resources:
-- ./components/deployment.yaml
-- ./components/service.yaml
-- ./components/route.yaml

@@ -60,26 +60,25 @@ spec:
     - name: git-tag
       taskRef:
         kind: ClusterTask
-        name: git-cli
+        name: git-tags
       runAfter:
         - git-clone
       params:
-        - name: GIT_SCRIPT
-          value: |
-            BUILD_ID="$(tasks.generate-build-id.results.build-id)"
-            NAME_TAG="$(params.name-tag)"
-            NAME_TAG="${NAME_TAG:-$BUILD_ID}"            
-            
-            cd "$(tasks.generate-build-id.results.build-id)"
-            git tag -a $NAME_TAG -m "[ci][Rollout] Rollout $(tasks.generate-build-id.results.build-id)"
-            git push origin --tags
+        - name: CONTEXT_DIR
+          value: "$(tasks.generate-build-id.results.build-id)"
+        - name: BUILD_ID
+          value: "$(tasks.generate-build-id.results.build-id)"
+        - name: NAME_TAG
+          value: "$(params.name-tag)"
+        - name: TAG_MESSAGE
+          value: "[ci][Rollout] Rollout $(tasks.generate-build-id.results.build-id)"
       workspaces:
         - name: source
           workspace: source-dir       
         - name: basic-auth
           workspace: git-basic-auth
         - name: ssh-directory
-          workspace: git-ssh-directory
+          workspace: git-ssh-directory          
   finally:
    - name: clean-build-folders
      taskRef:

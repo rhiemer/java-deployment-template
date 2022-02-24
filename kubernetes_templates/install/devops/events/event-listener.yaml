@@ -1,7 +1,7 @@
 apiVersion: triggers.tekton.dev/v1alpha1
 kind: EventListener
 metadata:
-  name: devops-service-listener
+  name: java-deployment-template
 spec:
   serviceAccountName: pipeline
   triggers:
@@ -10,4 +10,4 @@ spec:
           ref: github-push
       name: trigger-1
       template:
-        ref: devops-service-trigger
+        ref: java-deployment-template

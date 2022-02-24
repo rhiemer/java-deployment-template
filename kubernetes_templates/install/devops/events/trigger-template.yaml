@@ -1,7 +1,7 @@
 apiVersion: triggers.tekton.dev/v1alpha1
 kind: TriggerTemplate
 metadata:
-  name: devops-service-trigger
+  name: java-deployment-template
 spec:
   params:
     - default: main
@@ -13,10 +13,10 @@ spec:
     - apiVersion: tekton.dev/v1beta1
       kind: PipelineRun
       metadata:
-        generateName: devops-service-
+        generateName: java-deployment-template-
       spec:
         pipelineRef:
-          name: sample-java-pipeline
+          name: java-deployment-template
         serviceAccountName: pipeline
         workspaces:
           - name: source-dir

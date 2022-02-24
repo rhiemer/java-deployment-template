@@ -9,8 +9,6 @@ spec:
     namespace: devops-apps
     server: https://kubernetes.default.svc
   source:
-    directory:
-      recurse: true
     path: kubernetes_templates/deployment
     repoURL: https://github.com/rhiemer/java-deployment-template.git
     targetRevision: develop

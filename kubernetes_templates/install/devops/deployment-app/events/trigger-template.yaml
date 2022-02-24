@@ -19,6 +19,7 @@ spec:
           cicd/revision: $(tt.params.git-revision)
           cicd/message: $(tt.params.git-commit-message)
           cicd/pusher-name: $(tt.params.pusher-name)
+          cicd/url: $(tt.params.git-repo-url)
           cicd/stage: deployment-app
       spec:
         serviceAccountName: pipeline

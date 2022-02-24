@@ -64,10 +64,6 @@ spec:
       runAfter:
         - git-clone
       params:
-        - name: GIT_USER_EMAIL
-          value: user@email.com
-        - name: GIT_USER_NAME
-          value: user
         - name: GIT_SCRIPT
           value: |
             BUILD_ID="$(tasks.generate-build-id.results.build-id)"

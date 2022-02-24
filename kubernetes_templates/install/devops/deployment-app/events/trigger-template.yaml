@@ -42,8 +42,5 @@ spec:
               claimName: varlibc 
           - name: git-basic-auth
             secret:
-              secretName: git-basic-auth
-          - name: git-ssh-directory
-            secret:
-              secretName: git-ssh-auth              
+              secretName: git-basic-auth                      
             

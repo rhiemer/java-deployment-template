@@ -1,0 +1,13 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+  name: deployment-app
+spec:
+  serviceAccountName: pipeline
+  triggers:
+    - name: deployment-app-trigger
+      template:
+        ref: deployment-app
+      bindings:
+        - kind: ClusterTriggerBinding
+          ref: github-push      

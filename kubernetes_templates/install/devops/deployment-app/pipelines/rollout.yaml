@@ -5,22 +5,16 @@ metadata:
 spec:  
   params:
    - name: git-url
-     type: string
      default: 'https://github.com/rhiemer/java-deployment-template.git'
    - name: git-revision
-     type: string
      default: 'develop'     
    - name: rollout-app-name
-     type: string
      default: 'java-deployment-template' 
    - name: rollout-revision
-     type: string
      default: 'develop'     
    - name: base-revision
-     type: string
      default: 'develop'
    - name: name-tag
-     type: string
      default: ''                      
   tasks:
     - name: generate-build-id
@@ -53,7 +47,9 @@ spec:
         - name: revision
           value: "$(params.git-revision)"
         - name: subdirectory
-          value: "$(tasks.generate-build-id.results.build-id)"          
+          value: "$(tasks.generate-build-id.results.build-id)"
+        - name: deleteExisting
+          value: "true"                    
       workspaces:
         - name: output
           workspace: source-dir                  
@@ -79,7 +75,7 @@ spec:
             NAME_TAG="${NAME_TAG:-$BUILD_ID}"            
             
             cd "$(tasks.generate-build-id.results.build-id)"
-            git tag -a $NAME_TAG -m "[DevOps][Rollout] Rollout $(tasks.generate-build-id.results.build-id)"
+            git tag -a $NAME_TAG -m "[ci][Rollout] Rollout $(tasks.generate-build-id.results.build-id)"
             git push origin --tags
       workspaces:
         - name: source
@@ -88,6 +84,18 @@ spec:
           workspace: git-basic-auth
         - name: ssh-directory
           workspace: git-ssh-directory
+  finally:
+   - name: clean-build-folders
+     taskRef:
+       kind: ClusterTask
+       name: clear-folders
+     params:
+       - name: FOLDERS
+         value: 
+           - $(tasks.generate-build-id.results.build-id)
+     workspaces:
+       - name: source
+         workspace: source-dir             
   workspaces:
     - name: source-dir
     - name: git-basic-auth

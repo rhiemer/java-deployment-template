@@ -4,11 +4,8 @@ metadata:
   name: devops-service-trigger
 spec:
   params:
-    - default: main
-      description: The git revision
-      name: git-revision
-    - description: The git repository url
-      name: git-repo-url
+    - name: git-revision
+    - name: git-repo-url
   resourcetemplates:
     - apiVersion: tekton.dev/v1beta1
       kind: PipelineRun

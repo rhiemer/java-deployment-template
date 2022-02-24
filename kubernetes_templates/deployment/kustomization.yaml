@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 metadata:
-  name: arbitrary
+  name: kustomization-deployment
 
 namespace: devops-apps
 
@@ -10,8 +10,8 @@ commonLabels:
 
 images:
  - name: java-deployment-template
-   newName: my.docker.registry.com/my-project/my-xxx
-   newTag: test  
+   newName: image-registry.openshift-image-registry.svc:5000/devops-apps/devops-service
+   newTag: latest
 
 resources:
 - ./components/deployment.yaml

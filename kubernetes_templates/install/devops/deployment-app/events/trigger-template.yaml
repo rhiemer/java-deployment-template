@@ -16,6 +16,8 @@ spec:
         generateName: deployment-app-$(tt.params.git-repo-name)-$(tt.params.git-revision)-
         labels:
           cicd/stage: deployment-app
+          cicd/app: $(tt.params.git-repo-name)
+          cicd/revision: $(tt.params.git-revision)
       spec:
         serviceAccountName: pipeline
         pipelineRef:

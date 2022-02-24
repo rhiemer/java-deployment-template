@@ -64,14 +64,14 @@ spec:
       runAfter:
         - git-clone
       params:
-        - name: CONTEXT_DIR
-          value: "$(tasks.generate-build-id.results.build-id)"
-        - name: BUILD_ID
-          value: "$(tasks.generate-build-id.results.build-id)"
-        - name: NAME_TAG
-          value: "$(params.name-tag)"
+        - name: NAMES_TAG
+          value: 
+            - "$(params.name-tag)"
+            - "$(tasks.generate-build-id.results.build-id)"
         - name: TAG_MESSAGE
           value: "[ci][Rollout] Rollout $(tasks.generate-build-id.results.build-id)"
+        - name: CONTEXT_DIR
+          value: "$(tasks.generate-build-id.results.build-id)"
       workspaces:
         - name: source
           workspace: source-dir       

@@ -5,6 +5,7 @@ metadata:
 spec:
   interceptors:
     - cel:
+        filter: "body.ref.split('/')[2] in ['develop','homolog','main','master']"
         overlays:
         - key: branch-name
           expression: "body.ref.split('/')[2]"

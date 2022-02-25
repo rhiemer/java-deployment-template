@@ -3,15 +3,8 @@ kind: Trigger
 metadata:
   name: deployment-app
 spec:
-  interceptors:
-    - cel:
-        overlays:
-        - key: branch_name
-          expression: "body.ref.split('/')[2]"  
   bindings:
     - kind: ClusterTriggerBinding
       ref: github-push
-    - kind: ClusterTriggerBinding
-      ref: extensions
   template:
     ref: deployment-app      

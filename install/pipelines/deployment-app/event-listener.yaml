@@ -5,9 +5,4 @@ metadata:
 spec:
   serviceAccountName: pipeline
   triggers:
-    - bindings:
-        - kind: ClusterTriggerBinding
-          ref: github-push
-      name: trigger-1
-      template:
-        ref: deployment-app   
+    - triggerRef: deployment-app

@@ -1,0 +1,50 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: build-maven-app
+spec:
+  params:
+    - name: git-repo-name
+    - name: branch-name
+    - name: git-repo-url
+    - name: git-revision
+    - name: git-commit-message
+    - name: pusher-name
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1beta1
+      kind: PipelineRun
+      metadata:
+        generateName: build-maven-app-$(tt.params.git-repo-name)-$(tt.params.git-revision)-
+        labels:
+          cicd/app: $(tt.params.git-repo-name)
+          cicd/branch: $(tt.params.branch-name)
+          cicd/revision: $(tt.params.git-revision)
+          cicd/pusher: $(tt.params.pusher-name)
+          cicd/stage: build-maven-app
+      spec:
+        serviceAccountName: pipeline
+        pipelineRef:
+          name: rollout
+        params:
+          - name: git-url
+            value: $(tt.params.git-repo-url)
+          - name: git-revision
+            value: $(tt.params.branch-name)
+          - name: rollout-app-name
+            value: $(tt.params.git-repo-name)
+          - name: rollout-revision
+            value: $(tt.params.branch-name)
+          - name: base-revision
+            value: $(tt.params.branch-name)
+          - name: name-tag              
+            value: ''
+        workspaces:
+          - name: source-dir
+            persistentVolumeClaim:
+              claimName: tekton-workspace      
+          - name: varlibc
+            persistentVolumeClaim:
+              claimName: varlibc 
+          - name: git-basic-auth
+            secret:
+              secretName: git-basic-auth                                

@@ -1,0 +1,17 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: Trigger
+metadata:
+  name: build-maven-app
+spec:
+  interceptors:
+    - cel:
+        overlays:
+        - key: branch_name
+          expression: "body.ref.split('/')[2]"  
+  bindings:
+    - kind: ClusterTriggerBinding
+      ref: github-push
+    - kind: ClusterTriggerBinding
+      ref: extensions
+  template:
+    ref: build-maven-app      

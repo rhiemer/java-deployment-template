@@ -1,0 +1,19 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: build-maven-app
+  labels:
+    app.kubernetes.io/managed-by: EventListener
+    app.kubernetes.io/part-of: Triggers
+    eventlistener: build-maven-app
+spec:
+  host: build-maven-app-webhook.apps.cluster-tln9z.tln9z.sandbox1718.opentlc.com  
+  tls:
+    termination: edge
+  port:
+    targetPort: http-listener
+  to:
+    kind: Service
+    name: el-build-maven-app
+    weight: 100
+  wildcardPolicy: None

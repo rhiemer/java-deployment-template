@@ -1,0 +1,60 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: maven-info
+spec:
+  workspaces:
+    - name: source
+  params:
+    - name: MAVEN_IMAGE
+      type: string
+      description: Maven base image
+      default: maven:3.8.4-jdk-8
+    - name: CONTEXT_DIR
+      type: string     
+      default: "."
+    - name: TAG_IS_VERSION_MAVEN
+      type: string
+      description: Maven base image
+      default: "false"  
+    - name: base-version
+      description: Base product version
+      type: string
+      default: ""      
+  results:
+    - description: Project groupId read from pom.xml
+      name: groupId      
+    - description: Project artifactId read from pom.xml
+      name: artifactId      
+    - description: Project version read from pom.xml
+      name: version
+    - description: Project name read from pom.xml
+      name: name
+    - description: Project description read from pom.xml
+      name: description
+  steps:
+    - name: set-maven-infos
+      image: $(params.MAVEN_IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      script: |
+        #!/usr/bin/env bash
+        set -o errexit
+
+        getPropertyMaven(){
+
+          PROPERTY_MAVEN="${1}"
+          RESULT="${2}"
+          DEFAULT="${3}"
+
+          VALUE=$(/usr/bin/mvn help:evaluate -Dexpression=$PROPERTY_MAVEN -q -DforceStdout || echo "")          
+          VALUE2="${VALUE:-$DEFAULT}"
+          echo -n "$VALUE2" | tee $RESULT          
+        }
+
+        getPropertyMaven "project.groupId" "$(results.groupId.path)"
+        getPropertyMaven "project.version" "$(results.version.path)"
+        getPropertyMaven "project.artifactId" "$(results.artifactId.path)"
+        ARTIFACTID="$VALUE2"       
+        getPropertyMaven "project.name" "$(results.name.path)" "$ARTIFACTID"        
+        NAME="$VALUE2"
+        getPropertyMaven "project.description" "$(results.description.path)" "$NAME"

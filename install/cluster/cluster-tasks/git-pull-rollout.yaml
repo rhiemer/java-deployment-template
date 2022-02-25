@@ -1,0 +1,154 @@
+﻿apiVersion: tekton.dev/v1beta1
+kind: ClusterTask
+metadata:
+  name: git-pull-rollout
+spec:
+  params:
+    - name: IMAGE_NAME
+      type: string
+    - name: NEW_IMAGE
+      type: string
+    - name: NEW_TAG
+      type: string
+    - name: FILE_KUSTOMIZATION_DEPLOYMENT
+      type: string
+      default: "kubernetes_templates/deployment/kustomization.yaml"      
+    - name: BUILD_NAME
+      type: string
+      default: ""
+    - name: CONTEXT_DIR
+      type: string
+      default: "."
+    - name: GIT_IMAGE
+      default: >-
+        docker.io/alpine/git:v2.26.2@sha256:23618034b0be9205d9cc0846eb711b12ba4c9b468efdd8a59aac1d7b1a23363f
+      type: string
+    - name: PYTHON_IMAGE
+      default: python:3.9
+      type: string      
+    - default: /root
+      name: USER_HOME
+      type: string
+    - default: 'true'
+      name: VERBOSE
+      type: string      
+  results:
+    - description: The precise commit SHA after the git operation.
+      name: commit
+  steps:
+    - name: update-kustomization-yaml
+      image: $(params.PYTHON_IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      resources: {}
+      env:
+        - name: FILE_KUSTOMIZATION_DEPLOYMENT
+          value: $(params.FILE_KUSTOMIZATION_DEPLOYMENT)
+        - name: IMAGE_NAME
+          value: $(params.IMAGE_NAME)          
+        - name: NEW_IMAGE
+          value: $(params.NEW_IMAGE)          
+        - name: NEW_TAG
+          value: $(params.NEW_TAG)
+      script: |
+          #!/bin/bash
+          set -o errexit
+          
+          python3 -m pip install pyyaml
+
+          YAML_TMP="$(mktemp -t )"
+
+          python3 -c "
+          import yaml
+          with open(\"$FILE_KUSTOMIZATION_DEPLOYMENT\") as f:
+              y=yaml.safe_load(f)    
+              if not 'images' in y:
+                y['images'] = []
+              images = list(filter(lambda obj:(obj['name'] == \"$IMAGE_NAME\"),y['images']))
+              if not images:
+                y['images'].append({ 'name':\"$IMAGE_NAME\",'newName':\"$NEW_IMAGE\",'newTag':\"$NEW_TAG\"})
+              else:
+                for image in images:
+                  image['newName'] = \"$NEW_IMAGE\"
+                  image['newTag'] = \"$NEW_TAG\"
+              print(yaml.dump(y, default_flow_style=False, sort_keys=False))
+
+          " > $YAML_TMP
+
+          cat $YAML_TMP > $FILE_KUSTOMIZATION_DEPLOYMENT
+
+
+    - name: git-push
+      image: $(params.GIT_IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      resources: {}
+      env:
+        - name: NEW_IMAGE
+          value: $(params.NEW_IMAGE)          
+        - name: NEW_TAG
+          value: $(params.NEW_TAG)
+        - name: BUILD_NAME
+          value: $(params.BUILD_NAME)          
+        - name: FILE_KUSTOMIZATION_DEPLOYMENT
+          value: $(params.FILE_KUSTOMIZATION_DEPLOYMENT)
+        - name: PARAM_VERBOSE
+          value: $(params.VERBOSE)
+        - name: PARAM_USER_HOME
+          value: $(params.USER_HOME)
+        - name: WORKSPACE_SSH_DIRECTORY_BOUND
+          value: $(workspaces.ssh-directory.bound)
+        - name: WORKSPACE_SSH_DIRECTORY_PATH
+          value: $(workspaces.ssh-directory.path)
+        - name: WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND
+          value: $(workspaces.basic-auth.bound)
+        - name: WORKSPACE_BASIC_AUTH_DIRECTORY_PATH
+          value: $(workspaces.basic-auth.path)
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+
+        if [ "${PARAM_VERBOSE}" = "true" ] ; then
+          set -x
+        fi
+
+        if [ "${WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND}" = "true" ] ; then
+          cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.git-credentials" "${PARAM_USER_HOME}/.git-credentials"
+          cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.gitconfig" "${PARAM_USER_HOME}/.gitconfig"
+          chmod 400 "${PARAM_USER_HOME}/.git-credentials"
+          chmod 400 "${PARAM_USER_HOME}/.gitconfig"
+        fi
+
+        if [ "${WORKSPACE_SSH_DIRECTORY_BOUND}" = "true" ] ; then
+          cp -R "${WORKSPACE_SSH_DIRECTORY_PATH}" "${PARAM_USER_HOME}"/.ssh
+          chmod 700 "${PARAM_USER_HOME}"/.ssh
+          chmod -R 400 "${PARAM_USER_HOME}"/.ssh/*
+        fi
+
+        # buscar branch atual
+        LAST_BRANCH="$( git branch -a --contains $(git rev-parse --short HEAD) | grep remote  | tail -n 1 )"
+        REMOTE_ORIGIN=`echo $LAST_BRANCH | awk -F "/" '{print $2}'`
+        REMOTE_BRANCH=`echo $LAST_BRANCH | awk -F "/" '{print $3}'`
+
+        git status
+
+        git add "$FILE_KUSTOMIZATION_DEPLOYMENT"
+
+        IMAGE_FULL="${NEW_IMAGE}:${NEW_TAG}"        
+        
+        git commit --allow-empty -m "[DevOps][BuildImage] BuildImage ${BUILD_NAME:-$IMAGE_FULL}."        
+        
+        git push $REMOTE_ORIGIN HEAD:${REMOTE_BRANCH} --force
+
+        RESULT_SHA="$(git rev-parse HEAD | tr -d '\n')"
+        EXIT_CODE="$?"
+        if [ "$EXIT_CODE" != 0 ]
+        then
+          exit $EXIT_CODE
+        fi
+        # Make sure we don't add a trailing newline to the result!
+        echo -n "$RESULT_SHA" > $(results.commit.path)
+  workspaces:
+    - name: source
+    - name: ssh-directory
+      optional: true
+    - name: basic-auth
+      optional: true

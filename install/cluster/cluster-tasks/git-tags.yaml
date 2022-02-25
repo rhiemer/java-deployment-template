@@ -1,0 +1,107 @@
+﻿apiVersion: tekton.dev/v1beta1
+kind: ClusterTask
+metadata:
+  name: git-tags
+spec:
+  params:
+    - name: CONTEXT_DIR
+      type: string
+      default: "."
+    - name: GIT_IMAGE
+      default: >-
+        docker.io/alpine/git:v2.26.2@sha256:23618034b0be9205d9cc0846eb711b12ba4c9b468efdd8a59aac1d7b1a23363f
+    - name: TAG_MESSAGE
+    - name: NAMES_TAG
+      type: array
+    - name: GIT_USER_NAME
+      default: ''   
+    - name: GIT_USER_EMAIL
+      default: ''   
+    - name: USER_HOME      
+      default: ''
+    - name: VERBOSE
+      default: 'true'   
+  results:
+    - description: The precise commit SHA after the git operation.
+      name: commit
+  steps:
+    - name: git-tag
+      image: $(params.GIT_IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      resources: {}
+      env:
+        - name: TAG_MESSAGE
+          value: $(params.TAG_MESSAGE)          
+        - name: PARAM_GIT_USER_NAME
+          value: $(params.GIT_USER_NAME)          
+        - name: PARAM_GIT_USER_EMAIL
+          value: $(params.GIT_USER_EMAIL)          
+        - name: PARAM_VERBOSE
+          value: $(params.VERBOSE)
+        - name: PARAM_USER_HOME
+          value: $(params.USER_HOME)
+        - name: WORKSPACE_SSH_DIRECTORY_BOUND
+          value: $(workspaces.ssh-directory.bound)
+        - name: WORKSPACE_SSH_DIRECTORY_PATH
+          value: $(workspaces.ssh-directory.path)
+        - name: WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND
+          value: $(workspaces.basic-auth.bound)
+        - name: WORKSPACE_BASIC_AUTH_DIRECTORY_PATH
+          value: $(workspaces.basic-auth.path)
+      args:
+        - $(params.NAMES_TAG[*])          
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+
+        if [ "${PARAM_VERBOSE}" = "true" ] ; then
+          set -x
+        fi
+
+        PARAM_USER_HOME="${PARAM_USER_HOME:-`realpath ~`}"
+
+        if [ "${WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND}" = "true" ] ; then
+          cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.git-credentials" "${PARAM_USER_HOME}/.git-credentials"
+          cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.gitconfig" "${PARAM_USER_HOME}/.gitconfig"
+          chmod 400 "${PARAM_USER_HOME}/.git-credentials"
+          chmod 400 "${PARAM_USER_HOME}/.gitconfig"
+        fi
+
+        if [ "${WORKSPACE_SSH_DIRECTORY_BOUND}" = "true" ] ; then
+          cp -R "${WORKSPACE_SSH_DIRECTORY_PATH}" "${PARAM_USER_HOME}/.ssh"
+          chmod 700 "${PARAM_USER_HOME}/.ssh"
+          chmod -R 400 "${PARAM_USER_HOME}/.ssh/*"
+        fi
+
+        if [ ! -z "${PARAM_GIT_USER_NAME// }" ]; then
+           git config --global user.name "$PARAM_GIT_USER_NAME"          
+        fi
+
+        if [ ! -z "${PARAM_GIT_USER_EMAIL// }" ]; then
+           git config --global user.email "$PARAM_GIT_USER_EMAIL"          
+        fi        
+
+        for NAME_TAG in $@ 
+        do    
+           if [ ! -z "${NAME_TAG// }" ] ; then
+              break;
+           fi
+        done        
+
+        git tag -a $NAME_TAG -m "$TAG_MESSAGE"
+        git push origin --tags
+        
+        RESULT_SHA="$(git rev-parse HEAD | tr -d '\n')"
+        EXIT_CODE="$?"
+        if [ "$EXIT_CODE" != 0 ]
+        then
+          exit $EXIT_CODE
+        fi
+        # Make sure we don't add a trailing newline to the result!
+        echo -n "$RESULT_SHA" > $(results.commit.path)
+  workspaces:
+    - name: source
+    - name: ssh-directory
+      optional: true
+    - name: basic-auth
+      optional: true

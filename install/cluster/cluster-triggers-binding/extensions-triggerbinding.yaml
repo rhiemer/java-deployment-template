@@ -1,0 +1,8 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: ClusterTriggerBinding
+metadata:
+  name: extensions
+spec:
+  params:
+  - name: branch_name
+    value: $(extensions.branch_name)

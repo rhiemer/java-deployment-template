@@ -1,0 +1,307 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: sample-java-pipeline
+spec:  
+  params:
+   - name: git-url
+     type: string
+     default: 'https://github.com/rhiemer/devops-service.git'
+   - name: git-revision
+     type: string
+     default: 'main'
+   - name: image-registry
+     type: string
+     default: 'image-registry.openshift-image-registry.svc:5000/devops-apps'     
+   - name: base-revision
+     type: string
+     default: 'develop'
+   - name: spring-boot
+     type: string
+     default: 'true'  
+   - name: image-latest
+     type: string
+     default: 'true'  
+   - name: name-tag
+     type: string
+     default: ''      
+   - name: git-deployment-url
+     type: string
+     default: 'https://github.com/rhiemer/java-deployment-template.git'
+   - name: git-deployment-revision
+     type: string
+     default: 'develop'                   
+  tasks:
+    - name: generate-build-id
+      taskRef:
+        kind: Task
+        name: generate-build-id
+      params:
+        - name: base-version
+          value: '$(params.base-revision)'
+    - name: git-clone
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      runAfter:
+        - generate-build-id
+      params:
+        - name: url
+          value: "$(params.git-url)"
+        - name: revision
+          value: "$(params.git-revision)"
+        - name: subdirectory
+          value: "$(tasks.generate-build-id.results.build-id)"  
+        - name: deleteExisting
+          value: "true"                    
+      workspaces:
+        - name: output
+          workspace: source-dir
+        - name: basic-auth
+          workspace: git-basic-auth
+        - name: ssh-directory
+          workspace: git-ssh-directory          
+    - name: maven-info
+      runAfter:
+        - git-clone
+      taskRef:
+        kind: Task
+        name: maven-info
+      params:
+        - name: CONTEXT_DIR
+          value: "$(tasks.generate-build-id.results.build-id)"        
+      workspaces:
+        - name: source
+          workspace: source-dir
+    - name: run-info
+      taskRef:
+        kind: Task
+        name: run-info
+      runAfter:
+        - maven-info
+      params:
+        - name: BUILD_ID
+          value: "$(tasks.generate-build-id.results.build-id)"        
+        - name: VERSION
+          value: "$(tasks.maven-info.results.version)"        
+        - name: IMAGE_HOST
+          value: '$(params.image-registry)'
+        - name: IMAGE_NAME
+          value: $(tasks.maven-info.results.artifactId) 
+        - name: IMAGE_LATEST
+          value: '$(params.image-latest)'
+        - name: PREFIX_BUILD_TYPE
+          value: "$(tasks.maven-info.results.version)-"                             
+    - name: unit-tests
+      taskRef:
+        kind: Task
+        name: maven-build
+      runAfter:
+        - run-info
+      params:
+        - name: TYPE
+          value: unit-tests
+        - name: CLEAN
+          value: "true"
+        - name: SITE
+          value: "true"    
+        - name: CONTEXT_DIR
+          value: "$(tasks.generate-build-id.results.build-id)"        
+      workspaces:
+        - name: source
+          workspace: source-dir
+        - name: repo
+          workspace: maven-repo
+        - name: settings
+          workspace: maven-settings             
+    - name: compile
+      taskRef:
+        kind: Task
+        name: maven-build
+      runAfter:
+        - unit-tests
+      params:
+        - name: TYPE
+          value: package
+        - name: SPRING_BOOT
+          value: "$(params.spring-boot)"
+        - name: CONTEXT_DIR
+          value: "$(tasks.generate-build-id.results.build-id)"
+      workspaces:
+        - name: source
+          workspace: source-dir
+        - name: repo
+          workspace: maven-repo
+        - name: settings
+          workspace: maven-settings
+    - name: sonar
+      taskRef:
+        kind: Task
+        name: sonar
+      runAfter:
+        - compile
+      params:
+        - name: SONAR_TYPE
+          value: maven
+        - name: KEY
+          value: "$(tasks.maven-info.results.artifactId)"         
+        - name: NAME
+          value: "$(tasks.maven-info.results.name)"         
+        - name: DESCRIPTION
+          value: "$(tasks.maven-info.results.description)"         
+        - name: VERSION
+          value: "$(tasks.run-info.results.tag)" 
+        - name: CONTEXT_DIR
+          value: "$(tasks.generate-build-id.results.build-id)"        
+      workspaces:
+        - name: source
+          workspace: source-dir
+        - name: settings
+          workspace: sonar-settings          
+    - name: image-build
+      taskRef:
+        kind: Task
+        name: buildah-build
+      runAfter:
+        - sonar
+      params:
+        - name: IMAGE_BUILD
+          value: "$(tasks.run-info.results.image-push)"
+        - name: CONTEXT_DIR
+          value: "$(tasks.generate-build-id.results.build-id)"
+      workspaces:
+        - name: source
+          workspace: source-dir
+        - name: varlibc
+          workspace: varlibc
+    - name: image-tag
+      taskRef:
+        kind: Task
+        name: buildah-tag
+      runAfter:
+        - image-build
+      params:
+        - name: IMAGE
+          value: "$(tasks.run-info.results.image-push)"
+        - name: IMAGES_TAG
+          value: 
+            - "$(tasks.run-info.results.image-push-build-id)"
+            - "$(tasks.run-info.results.image-push-version)"
+            - "$(tasks.run-info.results.image-push-latest)"
+            - "$(tasks.run-info.results.image-promotion)"
+            - "$(tasks.run-info.results.image-promotion-latest)"
+      workspaces:
+        - name: varlibc
+          workspace: varlibc          
+    - name: image-push
+      taskRef:
+        kind: Task
+        name: buildah-push
+      runAfter:
+        - image-tag
+      params:
+        - name: IMAGES
+          value: 
+            - "$(tasks.run-info.results.image-push-build-id)"
+            - "$(tasks.run-info.results.image-push-version)"
+            - "$(tasks.run-info.results.image-push-latest)"
+      workspaces:
+        - name: varlibc
+          workspace: varlibc  
+    - name: git-tag
+      taskRef:
+        kind: ClusterTask
+        name: git-cli
+      runAfter:
+        - image-push
+      params:
+        - name: GIT_USER_EMAIL
+          value: user@email.com
+        - name: GIT_USER_NAME
+          value: user
+        - name: GIT_SCRIPT
+          value: |
+            BUILD_ID="$(tasks.run-info.results.tag)"
+            NAME_TAG="$(params.name-tag)"
+            NAME_TAG="${NAME_TAG:-$BUILD_ID}"            
+            
+            cd "$(tasks.generate-build-id.results.build-id)"
+            git tag -a $NAME_TAG -m "[DevOps][BuildImage] BuildImage $(tasks.run-info.results.image-push)."
+            git push origin --tags
+      workspaces:
+        - name: source
+          workspace: source-dir       
+        - name: basic-auth
+          workspace: git-basic-auth
+        - name: ssh-directory
+          workspace: git-ssh-directory
+    - name: git-clone-deployment
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      runAfter:
+        - image-push
+      params:
+        - name: url
+          value: "$(params.git-deployment-url)"
+        - name: revision
+          value: "$(params.git-deployment-revision)"
+        - name: subdirectory
+          value: "$(tasks.generate-build-id.results.build-id)-deployment"          
+      workspaces:
+        - name: output
+          workspace: source-dir            
+        - name: basic-auth
+          workspace: git-deployment-basic-auth
+        - name: ssh-directory
+          workspace: git-deployment-ssh-directory 
+    - name: push-update-image
+      taskRef:
+        kind: ClusterTask
+        name: git-pull-rollout
+      runAfter:
+        - git-clone-deployment
+      params:
+        - name: IMAGE_NAME
+          value: "$(tasks.maven-info.results.artifactId)"
+        - name: NEW_IMAGE
+          value: "$(tasks.run-info.results.new-image)"
+        - name: NEW_TAG
+          value: "$(tasks.run-info.results.tag)"
+        - name: CONTEXT_DIR
+          value: "$(tasks.generate-build-id.results.build-id)-deployment"           
+      workspaces:
+        - name: source
+          workspace: source-dir            
+        - name: basic-auth
+          workspace: git-deployment-basic-auth
+        - name: ssh-directory
+          workspace: git-deployment-ssh-directory
+  finally:
+    - name: clean-build-folders
+      taskRef:
+        kind: ClusterTask
+        name: clear-folders
+      params:
+        - name: FOLDERS
+          value: 
+            - $(tasks.generate-build-id.results.build-id)
+            - $(tasks.generate-build-id.results.build-id)-deployment
+      workspaces:
+        - name: source
+          workspace: source-dir          
+  workspaces:
+    - name: source-dir
+    - name: varlibc   
+    - name: maven-repo
+    - name: maven-settings  
+    - name: sonar-settings
+    - name: git-basic-auth
+      optional: true   
+    - name: git-ssh-directory
+      optional: true   
+    - name: git-deployment-basic-auth
+      optional: true   
+    - name: git-deployment-ssh-directory
+      optional: true   
+   

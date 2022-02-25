@@ -15,11 +15,7 @@ spec:
       kind: PipelineRun
       metadata:
         generateName: deployment-app-$(tt.params.git-repo-name)-$(tt.params.git-revision)-
-        labels:
-          cicd/app: $(tt.params.git-repo-name)
-          cicd/branch: $(tt.params.branch-name)
-          cicd/revision: $(tt.params.git-revision)
-          cicd/pusher: $(tt.params.pusher-name)
+        labels:          
           cicd/stage: deployment-app
       spec:
         serviceAccountName: pipeline

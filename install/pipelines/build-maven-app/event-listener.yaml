@@ -5,4 +5,4 @@ metadata:
 spec:
   serviceAccountName: pipeline
   triggers:
-    - triggerRef: build-maven-app   
+    - triggerRef: build-maven-app

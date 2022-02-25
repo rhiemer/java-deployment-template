@@ -5,13 +5,14 @@ metadata:
 spec:
   interceptors:
     - cel:
+        filter: "body.ref.split('/')[2] in ['develop','homolog','main','master']"
         overlays:
-        - key: branch_name
-          expression: "body.ref.split('/')[2]"  
+        - key: branch-name
+          expression: "body.ref.split('/')[2]"
   bindings:
     - kind: ClusterTriggerBinding
       ref: github-push
     - kind: ClusterTriggerBinding
-      ref: extensions
+      ref: extensions      
   template:
     ref: build-maven-app      

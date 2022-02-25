@@ -14,37 +14,50 @@ spec:
     - apiVersion: tekton.dev/v1beta1
       kind: PipelineRun
       metadata:
-        generateName: build-maven-app-$(tt.params.git-repo-name)-$(tt.params.git-revision)-
+        generateName: build-maven-app-$(tt.params.git-repo-name)-$(tt.params.branch-name)-
         labels:
           cicd/app: $(tt.params.git-repo-name)
-          cicd/branch: $(tt.params.branch-name)
           cicd/revision: $(tt.params.git-revision)
           cicd/pusher: $(tt.params.pusher-name)
+          cicd/branch: $(tt.params.branch-name)
           cicd/stage: build-maven-app
       spec:
         serviceAccountName: pipeline
         pipelineRef:
-          name: rollout
+          name: build-maven-app
         params:
           - name: git-url
             value: $(tt.params.git-repo-url)
           - name: git-revision
             value: $(tt.params.branch-name)
-          - name: rollout-app-name
-            value: $(tt.params.git-repo-name)
-          - name: rollout-revision
-            value: $(tt.params.branch-name)
           - name: base-revision
             value: $(tt.params.branch-name)
-          - name: name-tag              
-            value: ''
+          - name: image-registry
+            value: 'image-registry.openshift-image-registry.svc:5000/devops-apps'
+          - name: git-deployment-url             
+            value: 'https://github.com/rhiemer/java-deployment-template.git'           
+          - name: git-deployment-revision             
+            value: $(tt.params.branch-name)            
         workspaces:
           - name: source-dir
             persistentVolumeClaim:
-              claimName: tekton-workspace      
+              claimName: tekton-workspace
           - name: varlibc
             persistentVolumeClaim:
-              claimName: varlibc 
+              claimName: varlibc
+          - name: maven-repo
+            persistentVolumeClaim:
+              claimName: maven-repo
+          - configMap:
+              name: maven-settings
+            name: maven-settings
+          - configMap:
+              name: sonar-properties
+            name: sonar-settings
           - name: git-basic-auth
             secret:
-              secretName: git-basic-auth                                
+              secretName: git-basic-auth
+          - name: git-deployment-basic-auth
+            secret:
+              secretName: git-basic-auth                    
+            

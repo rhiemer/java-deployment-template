@@ -14,7 +14,7 @@ spec:
     - apiVersion: tekton.dev/v1beta1
       kind: PipelineRun
       metadata:
-        generateName: deployment-app-$(tt.params.git-repo-name)-$(tt.params.git-revision)-
+        generateName: deployment-app-$(tt.params.git-repo-name)-$(tt.params.branch-name)-
         labels:
           cicd/app: $(tt.params.git-repo-name)
           cicd/revision: $(tt.params.git-revision)

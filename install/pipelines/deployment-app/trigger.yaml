@@ -11,5 +11,7 @@ spec:
   bindings:
     - kind: ClusterTriggerBinding
       ref: github-push
+    - kind: ClusterTriggerBinding
+      ref: extensions      
   template:
     ref: deployment-app      

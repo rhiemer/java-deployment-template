@@ -6,7 +6,7 @@ spec:
   interceptors:
     - cel:
         overlays:
-        - key: branch_name
+        - key: branch-name
           expression: "body.ref.split('/')[2]"
   bindings:
     - kind: ClusterTriggerBinding

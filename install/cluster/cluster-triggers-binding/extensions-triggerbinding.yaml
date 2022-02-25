@@ -4,5 +4,5 @@ metadata:
   name: extensions
 spec:
   params:
-  - name: branch_name
-    value: $(extensions.branch_name)
+  - name: branch-name
+    value: $(extensions.branch-name)

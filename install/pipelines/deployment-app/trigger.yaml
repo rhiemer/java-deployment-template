@@ -1,0 +1,18 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: Trigger
+metadata:
+  name: deployment-app
+spec:
+  interceptors:
+    - cel:
+        filter: "body.ref.split('/')[2] in ['develop','homolog','main','master']"
+        overlays:
+        - key: branch-name
+          expression: "body.ref.split('/')[2]"
+  bindings:
+    - kind: ClusterTriggerBinding
+      ref: github-push
+    - kind: ClusterTriggerBinding
+      ref: extensions      
+  template:
+    ref: deployment-app      

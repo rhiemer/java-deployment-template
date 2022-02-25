@@ -1,0 +1,52 @@
+apiVersion: tekton.dev/v1beta1
+kind: ClusterTask
+metadata:
+  name: clear-folders
+spec:
+  workspaces:
+    - name: source
+  params:
+    - name: FOLDERS
+      type: array
+      default: []  
+    - name: CONTEXT_DIR
+      type: string
+      default: "."      
+    - name: IMAGE
+      type: string
+      default: "docker.io/library/bash:5.0.18@sha256:879f94a9da53dc064779e7a68339aecd60a9028ff884cacaa47ae752ca690404"  #tag: 5.0.18
+  steps:   
+    - name: clear-folders
+      image: $(params.IMAGE)
+      workingDir: $(workspaces.source.path)/$(params.CONTEXT_DIR)
+      args:
+        - $(params.FOLDERS[*])      
+      script: |
+          #!/usr/bin/env bash
+          set -o errexit 
+
+          cleandir() {
+            # We don't just "rm -rf ${DIR}" because ${DIR} might be "/"
+            # or the root of a mounted volume.
+            DIR="${1}"
+            if [ -d "${DIR}" ] ; then
+              echo "Excluindo o diretório `realpath $DIR`"
+
+              # Delete non-hidden files and directories
+              rm -rf "${DIR:?}"/*
+              # Delete files and directories starting with . but excluding ..
+              rm -rf "${DIR}"/.[!.]*
+              # Delete files and directories starting with .. plus any other character
+              rm -rf "${DIR}"/..?*
+            fi
+          }
+          
+          for _DIR in $@ 
+          do    
+            if [ ! -z "${_DIR// }" ] ; then
+              cleandir "$_DIR"
+            fi
+          done
+
+          
+

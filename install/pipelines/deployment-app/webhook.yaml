@@ -1,0 +1,19 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: deployment-app
+  labels:
+    app.kubernetes.io/managed-by: EventListener
+    app.kubernetes.io/part-of: Triggers
+    eventlistener: deployment-app
+spec:
+  host: deployment-app-webhook.apps.cluster-tln9z.tln9z.sandbox1718.opentlc.com  
+  tls:
+    termination: edge
+  port:
+    targetPort: http-listener
+  to:
+    kind: Service
+    name: el-deployment-app
+    weight: 100
+  wildcardPolicy: None

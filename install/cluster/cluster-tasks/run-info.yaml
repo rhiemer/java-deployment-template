@@ -1,0 +1,137 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: run-info
+spec:
+  params:
+    - name: IMAGE
+      type: string
+      default: "docker.io/library/bash:5.0.18@sha256:879f94a9da53dc064779e7a68339aecd60a9028ff884cacaa47ae752ca690404"  #tag: 5.0.18
+    - name: BUILD_ID
+      type: string
+      default: ""
+    - name: VERSION
+      type: string
+      default: ""
+    - name: TAG_TYPE
+      type: string
+      default: "build-id"
+    - name: PREFIX_VERSION_TYPE
+      type: string
+      default: ""      
+    - name: PREFIX_BUILD_TYPE
+      type: string
+      default: ""   
+    - name: IMAGE_HOST
+      type: string
+      description: the fully qualified image name
+      default: ""
+    - name: IMAGE_NAME
+      type: string
+      description: the fully qualified image name
+      default: ""    
+    - name: IMAGE_LATEST
+      type: string
+      description: the fully qualified image name
+      default: "false"       
+    - name: IMAGE_PROMOTION_HOST
+      type: string
+      description: the fully qualified image name
+      default: ""       
+    - name: IMAGE_PROMOTION_NAME
+      type: string
+      description: the fully qualified image name
+      default: ""       
+    - name: IMAGE_PROMOTION_LATEST
+      type: string
+      description: the fully qualified image name
+      default: "false"             
+    
+  results:
+    - description: Project groupId read from pom.xml
+      name: version
+    - description: Project groupId read from pom.xml
+      name: build-id
+    - description: Project groupId read from pom.xml
+      name: tag 
+    - description: Project groupId read from pom.xml
+      name: new-image
+    - description: Project groupId read from pom.xml
+      name: image-push
+    - description: Project groupId read from pom.xml
+      name: image-push-latest
+    - description: Project groupId read from pom.xml
+      name: image-push-version
+    - description: Project groupId read from pom.xml
+      name: image-push-build-id
+    - description: Project groupId read from pom.xml
+      name: image-promotion
+    - description: Project groupId read from pom.xml
+      name: image-promotion-latest
+  steps:
+    - name: set-run-infos
+      image: $(params.IMAGE)
+      script: |
+        #!/usr/bin/env bash
+        set -o errexit
+
+        BUILD_ID="$(params.BUILD_ID)"
+        VERSION="$(params.VERSION)"
+        TAG_TYPE="$(params.TAG_TYPE)"
+        PREFIX_VERSION_TYPE="$(params.PREFIX_VERSION_TYPE)"
+        PREFIX_BUILD_TYPE="$(params.PREFIX_BUILD_TYPE)"
+        IMAGE_HOST="$(params.IMAGE_HOST)"
+        IMAGE_NAME="$(params.IMAGE_NAME)"
+        IMAGE_LATEST="$(params.IMAGE_LATEST)"
+        IMAGE_PROMOTION_HOST="$(params.IMAGE_PROMOTION_HOST)"
+        IMAGE_PROMOTION_NAME="$(params.IMAGE_PROMOTION_NAME)"
+        IMAGE_PROMOTION_LATEST="$(params.IMAGE_PROMOTION_LATEST)"
+
+        IMAGE_PROMOTION_NAME="${IMAGE_PROMOTION_NAME:-$IMAGE_NAME}"
+
+        _VERSION="${PREFIX_VERSION_TYPE}${VERSION}"
+        _BUILD_ID="${PREFIX_BUILD_TYPE}${BUILD_ID}"
+
+        case $TAG_TYPE in
+          version)
+             TAG="$_VERSION"                         
+          ;;                  
+          *)
+             TAG="$_BUILD_ID"
+          ;;          
+        esac
+
+        echo -n "$TAG" | tee $(results.tag.path)
+        echo -n "$_BUILD_ID" | tee $(results.build-id.path)
+        echo -n "$_VERSION" | tee $(results.version.path)
+
+        if [[ ! -z "${IMAGE_HOST// }" && ! -z "${IMAGE_NAME// }"  ]] ; then
+          IMAGE_FULL="$IMAGE_HOST/$IMAGE_NAME"  
+
+          IMAGE_PUSH="$IMAGE_FULL:$TAG"
+          IMAGE_PUSH_VERSION="$IMAGE_FULL:$_VERSION"
+          IMAGE_PUSH_BUILD_ID="$IMAGE_FULL:$_BUILD_ID"
+
+          if [ "${IMAGE_LATEST// }" == "true" ] ; then
+            IMAGE_PUSH_LATEST="$IMAGE_FULL:latest"
+          fi
+
+        fi
+        echo -n "$IMAGE_FULL" | tee $(results.new-image.path)
+        echo -n "$IMAGE_PUSH" | tee $(results.image-push.path)
+        echo -n "$IMAGE_PUSH_VERSION" | tee $(results.image-push-version.path)
+        echo -n "$IMAGE_PUSH_BUILD_ID" | tee $(results.image-push-build-id.path)
+        echo -n "$IMAGE_PUSH_LATEST" | tee $(results.image-push-latest.path)
+
+        if [[ ! -z "${IMAGE_PROMOTION_HOST// }" && ! -z "${IMAGE_PROMOTION_NAME// }"  ]] ; then
+          IMAGE_PROMOTION_FULL="$IMAGE_PROMOTION_HOST/$IMAGE_PROMOTION_NAME"
+          IMAGE_PROMOTION="$IMAGE_PROMOTION_FULL:$_VERSION"
+          if [ "${IMAGE_PROMOTION_LATEST// }" == "true" ] ; then
+            _IMAGE_PROMOTION_LATEST="$IMAGE_PROMOTION_FULL:latest"
+          fi
+        fi
+
+        echo -n "$IMAGE_PROMOTION" | tee $(results.image-promotion.path)
+        echo -n "$_IMAGE_PROMOTION_LATEST" | tee $(results.image-promotion-latest.path)
+
+
